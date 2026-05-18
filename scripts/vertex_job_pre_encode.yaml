@@ -227,7 +227,11 @@ workerPoolSpecs:
 
         # ── Pre-encoding hyperparameters ──────────────────────────────────────
         - name: SAMPLE_SIZE
-          value: "132300"                         # 44100 Hz × 3 s = 132,300 samples
+          value: "131072"                         # 128 × 1024 (VAE ratio) ≈ 2.97 s at 44100 Hz.
+                                                   # Must be a multiple of 16384 (16 × 1024) so that
+                                                   # ADP U-Net skip connections align. Previously 132300
+                                                   # produced 129 latent steps (129%16=1), causing
+                                                   # RuntimeError in the skip-connection cat.
         - name: BATCH_SIZE
           value: "32"                             # Safe for A100 40GB at 3s / 64 tokens
         - name: NUM_WORKERS

@@ -342,6 +342,15 @@ class PreEncodedLatentsDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.pairs)
 
+    # ADP U-Net requires the latent time dimension to be divisible by the product
+    # of all temporal downsampling factors (factors=[1,2,2,4] → stride=16).  The
+    # pre-encode step historically used sample_size=132300 which yields 129 latent
+    # time steps (132300/1024=129.19, floored to 129).  129 % 16 == 1, causing a
+    # skip-connection shape mismatch: "Expected size 36 but got size 33" at the
+    # first upsample block.  We floor-crop to the nearest multiple of 16 here so
+    # that both legacy (129-step) and future (128-step) latents are handled safely.
+    _LATENT_TIME_MULTIPLE: int = 16
+
     def __getitem__(self, idx: int):
         npy_p, json_p = self.pairs[idx]
         try:
@@ -349,6 +358,21 @@ class PreEncodedLatentsDataset(torch.utils.data.Dataset):
             arr = np.squeeze(arr)
             if arr.ndim != 2:
                 raise ValueError(f"Expected 2D latent [channels, time] after squeeze, got {arr.shape}")
+
+            # Crop the time dimension to the nearest multiple of _LATENT_TIME_MULTIPLE
+            # so that all ADP U-Net skip connections align.  This is a no-op for
+            # correctly-sized latents and trims at most (_LATENT_TIME_MULTIPLE - 1)
+            # frames (~7 ms at 44.1 kHz / 1024 downsampling) from legacy ones.
+            T = arr.shape[1]
+            T_valid = (T // self._LATENT_TIME_MULTIPLE) * self._LATENT_TIME_MULTIPLE
+            if T_valid == 0:
+                raise ValueError(
+                    f"Latent time dimension {T} is smaller than the required multiple "
+                    f"{self._LATENT_TIME_MULTIPLE} — file may be corrupt: {npy_p}"
+                )
+            if T_valid < T:
+                arr = arr[:, :T_valid]
+
             latent = torch.from_numpy(arr.astype(np.float32, copy=False))
 
             with open(json_p, "r", encoding="utf-8") as f:
@@ -360,8 +384,11 @@ class PreEncodedLatentsDataset(torch.utils.data.Dataset):
             info.pop("audio", None)
 
             if "padding_mask" in info:
+                pm = info["padding_mask"]
+                # Crop padding_mask to match the (possibly trimmed) latent length.
                 info["padding_mask"] = torch.tensor(
-                    info["padding_mask"], dtype=torch.float32
+                    pm[:T_valid] if isinstance(pm, list) else pm,
+                    dtype=torch.float32,
                 )
 
             return latent, info

@@ -1,7 +1,7 @@
 {
-    "_comment": "Foundation-1 (stable-audio-open-1.0) architecture at 3s crop (44100 × 3 = 132300 samples). CRITICAL: pre_encode.py MUST be run with --sample-size 132300 to match this config. Latent tokens = sample_size / downsampling_ratio = 132300 / 1024 ≈ 129. Mismatched sample_size causes tensor shape errors during training (see ADR-002). CLAP path is a placeholder; runtime images mount real weights.",
+    "_comment": "Foundation-1 (stable-audio-open-1.0) architecture. sample_size=131072 = 128 × 1024 (VAE downsampling_ratio). The ADP U-Net factors=[1,2,2,4] require latent time (sample_size/1024) divisible by 16; 128 satisfies this. Previously 132300 (44100×3) gave 129 latent steps (129%16=1), causing RuntimeError: Sizes of tensors must match except in dimension 1 (36 vs 33) in the skip-connection cat. CLAP path is a placeholder; runtime images mount real weights.",
     "model_type": "diffusion_cond",
-    "sample_size": 132300,
+    "sample_size": 131072,
     "sample_rate": 44100,
     "audio_channels": 2,
     "model": {
