@@ -235,9 +235,24 @@ class PreEncodedLatentsDataset(torch.utils.data.Dataset):
 
     Expected layout (under each *root_path*): nested directories with ``rank/*/*.npy`` and sibling ``.json``,
     as written by :class:`pre_encode.PreEncodedLatentsInferenceWrapper`.
+    
+    Validates latent shapes against expected dimensions to catch pre-encoding
+    configuration mismatches early. See ADR-002 for the pre-encoded training workflow.
     """
 
-    def __init__(self, root_path: str, dataset_id: str = "latents"):
+    # Expected latent dimensions for Foundation-1 3s config:
+    #   sample_size = 132300 (44100 Hz × 3s)
+    #   downsampling_ratio = 1024 → latent_tokens = 132300 / 1024 ≈ 129
+    #   io_channels = 64
+    EXPECTED_LATENT_SHAPE = (64, 129)  # (channels, tokens)
+
+    def __init__(
+        self,
+        root_path: str,
+        dataset_id: str = "latents",
+        validate_shapes: bool = True,
+        shape_validation_sample_size: int = 100,
+    ):
         super().__init__()
         self.root_path = root_path
         self.dataset_id = dataset_id
@@ -258,6 +273,70 @@ class PreEncodedLatentsDataset(torch.utils.data.Dataset):
         assert len(self.pairs) > 0, (
             f"No .npy+.json pairs found under {root_path} — check gsutil rsync from "
             "gs://BUCKET/pre_encoded_3s/ and pre_encode completion."
+        )
+
+        # Validate latent shapes against expected dimensions
+        if validate_shapes:
+            self._validate_latent_shapes(shape_validation_sample_size)
+
+    def _validate_latent_shapes(self, sample_size: int = 100):
+        """Validate that latents have the expected shape for Foundation-1 3s config.
+
+        This catches pre-encoding misconfigurations where --sample-size was set
+        to the wrong value (e.g., default 1320960 instead of 132300).
+
+        Args:
+            sample_size: Number of random files to sample for validation.
+        """
+        import random
+
+        expected_channels, expected_tokens = self.EXPECTED_LATENT_SHAPE
+        sample_files = random.sample(self.pairs, min(sample_size, len(self.pairs)))
+        mismatches = []
+
+        for npy_p, _ in sample_files:
+            try:
+                arr = np.load(npy_p)
+                arr = np.squeeze(arr)
+                if arr.ndim != 2:
+                    mismatches.append(
+                        f"{npy_p}: got {arr.ndim}D after squeeze, expected 2D "
+                        f"(channels={arr.shape[0] if arr.ndim >= 1 else 'N/A'}, "
+                        f"tokens={arr.shape[1] if arr.ndim == 2 else 'N/A'})"
+                    )
+                    continue
+                actual_channels, actual_tokens = arr.shape
+                if actual_channels != expected_channels or actual_tokens != expected_tokens:
+                    # Calculate what sample_size would produce this token count
+                    # latent_tokens = sample_size / downsampling_ratio
+                    # For Foundation-1, downsampling_ratio = 1024
+                    derived_sample_size = actual_tokens * 1024
+                    mismatches.append(
+                        f"{npy_p}: shape {arr.shape} — "
+                        f"expected ({expected_channels}, {expected_tokens}). "
+                        f"This latent was likely encoded with sample_size={derived_sample_size}. "
+                        f"Verify pre_encode.py --sample-size matches model config (132300 for 3s)."
+                    )
+            except Exception as e:
+                mismatches.append(f"{npy_p}: failed to load: {e}")
+
+        if mismatches:
+            error_msg = (
+                f"\n{'='*60}\n"
+                f"SHAPE MISMATCH: Pre-encoded latents do not match expected dimensions.\n"
+                f"Expected shape: {self.EXPECTED_LATENT_SHAPE} (channels, tokens)\n"
+                f"This usually means pre_encode.py was run with the wrong --sample-size.\n"
+                f"See ADR-002 and pre_encode.py --sample-size documentation.\n"
+                f"{'='*60}\n"
+                + "\n".join(f"  - {m}" for m in mismatches[:10])
+            )
+            if len(mismatches) > 10:
+                error_msg += f"\n  ... and {len(mismatches) - 10} more mismatches"
+            raise ValueError(error_msg)
+
+        print(
+            f"  Shape validation passed: {len(sample_files)} files, "
+            f"all with shape {self.EXPECTED_LATENT_SHAPE}"
         )
 
     def __len__(self):

@@ -34,9 +34,12 @@ Raw Audio ──► OOBLECK VAE Encoder ──► Latent (64-dim, 2048× downsam
 | Parameter | 20-second (original) | 3-second (this fork) |
 |---|---|---|
 | `sample_size` | 882,000 | **132,300** |
-| Latent tokens | 430 | **64** |
+| Latent tokens | 430 | **129** |
+| Latent shape (channels × tokens) | (64, 430) | **(64, 129)** |
 | Pre-encoded `.npy` size per sample | ~220 KB | **~33 KB** |
 | Approx. training step speedup | baseline | **~4×** |
+
+> ⚠️ **Critical**: The pre-encoded latent shape must be `(64, 129)`. If `pre_encode.py` is run with the wrong `--sample-size`, the latents will have incorrect dimensions and training will fail with tensor shape mismatch errors. Always use `--sample-size 132300` for 3-second audio.
 
 ---
 
@@ -145,6 +148,10 @@ hf_hub_download(
 Production work for this project runs on **Vertex AI** (pre-encoding, then training). The steps below are ordered for that path.
 
 ### Step 1 — Pre-encode latents on Vertex (run once)
+
+> ⚠️ **Important**: Before running pre-encoding, ensure the `--sample-size` parameter matches your model config:
+> - 3-second audio (Foundation-1 3s): `--sample-size 132300`
+> - The default in `pre_encode.py` is already set to 132300, but verify the YAML env variable `SAMPLE_SIZE=132300`.
 
 For production, **pre-encoding is done only on Google Cloud** via the custom job in `scripts/vertex_job_pre_encode.yaml`. The container runs the same `pre_encode.py` as the repo, streams inputs from GCS, and writes `gs://$BUCKET/pre_encoded_3s/`.
 
@@ -281,6 +288,43 @@ README_DNL.md                                    ← This file
 docs/decisions/
     002-pre-encoded-latent-training.md           ← ADR (pre-encoded DiT training)
 ```
+
+---
+
+## Troubleshooting
+
+### RuntimeError: Sizes of tensors must match (Expected size X but got size Y)
+
+This error indicates that pre-encoded latent shapes don't match what the model expects.
+
+**Check 1: Verify latent shape**
+```bash
+# Download a sample and check its shape
+gsutil cp "gs://YOUR_BUCKET/pre_encoded_3s/000/0000000000000.npy" /tmp/sample.npy
+python3 -c "import numpy as np; print(np.load('/tmp/sample.npy').shape)"
+# Expected: (64, 129) — 64 channels, 129 tokens
+```
+
+**Check 2: Verify pre-encode configuration**
+- Ensure `SAMPLE_SIZE=132300` is set in your Vertex pre-encode job YAML
+- Ensure `pre_encode.py` is called with `--sample-size 132300`
+- Check the pre-encode job logs for any warnings about sample size mismatches
+
+**Fix: Re-run pre-encoding**
+```bash
+# Delete existing corrupted pre-encoded data
+gsutil -m rm -r "gs://YOUR_BUCKET/pre_encoded_3s/"
+
+# Re-submit pre-encode job with correct SAMPLE_SIZE
+gcloud ai custom-jobs create \
+  --region=europe-west4 \
+  --display-name=dnl-f1-pre-encode-fixed \
+  --config=scripts/vertex_job_pre_encode.yaml
+```
+
+### Training starts but crashes at first step with shape errors
+
+The `PreEncodedLatentsDataset` now includes shape validation that will catch mismatches at dataset initialization time. If you see a shape mismatch error during training, re-encode your data with the correct `--sample-size`.
 
 ---
 

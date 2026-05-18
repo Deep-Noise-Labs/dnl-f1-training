@@ -18,6 +18,7 @@ Accepted (2026-04-28)
 2. **Wire `dataset_type: "pre_encoded"`** in `create_dataloader_from_config` with the same `collation_fn` as other training loaders; support multiple `datasets[]` entries via `ConcatDataset` when needed.
 3. **Ship `stable_audio_tools/configs/dataset_configs/pre_encoded_f1_3s.json`** with `"path": "/workspace/pre_encoded_3s"` as the canonical Vertex/container path.
 4. **Set `"training": { "pre_encoded": true, ... }`** in `models/foundation1_3s/model_config_3s.json` so the training wrapper matches the dataset mode (must stay aligned with `train.py` → `create_training_wrapper_from_config`).
+5. **Shape validation in `PreEncodedLatentsDataset`**: The dataset class validates that latents match the expected shape `(64, 129)` for the 3s config. This catches pre-encoding misconfigurations (wrong `--sample-size`) early, before training starts.
 5. **Vertex job YAML:** define `DS_PRE=stable_audio_tools/configs/dataset_configs/pre_encoded_f1_3s.json`, verify the file exists before `torchrun`, pass `--dataset-config "${DS_PRE}"` — one definition, no drift between comment and CLI.
 6. **GCE shell workflow (`scripts/gcp_train_f1_3s.sh`):** replace gcsfuse-based mounting with **`gsutil rsync` of `gs://…/pre_encoded_3s/` to `/workspace/pre_encoded_3s`**, matching Vertex and the dataset JSON ( privileged fuse no longer required for that script path).
 
@@ -39,12 +40,13 @@ Accepted (2026-04-28)
 
 ## References
 
-- `stable_audio_tools/data/dataset.py` — `PreEncodedLatentsDataset`, `create_dataloader_from_config` (`pre_encoded` branch).
+- `stable_audio_tools/data/dataset.py` — `PreEncodedLatentsDataset` with `_validate_latent_shapes()`, `create_dataloader_from_config` (`pre_encoded` branch).
 - `stable_audio_tools/training/diffusion.py` — `DiffusionCondTrainingWrapper.training_step` (`pre_encoded` vs encode path).
 - `stable_audio_tools/configs/dataset_configs/pre_encoded_f1_3s.json` — canonical dataset config.
-- `models/foundation1_3s/model_config_3s.json` — `training.pre_encoded`.
+- `models/foundation1_3s/model_config_3s.json` — `training.pre_encoded`, expected latent shape `(64, 129)`.
 - `scripts/vertex_job_f1_3s.yaml` — `DS_PRE`, rsync step, `torchrun` invocation.
 - `scripts/gcp_train_f1_3s.sh` — Step 3 `gsutil rsync` to `/workspace/pre_encoded_3s`.
+- `scripts/vertex_job_pre_encode.yaml` — `SAMPLE_SIZE=132300` must match model config.
 - `.github/workflows/ci.yml` — optional smoke checks for artifact paths inside the built image (related guardrail).
 
 ## Verification (repeatable)

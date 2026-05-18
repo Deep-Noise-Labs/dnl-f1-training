@@ -1,5 +1,5 @@
 {
-    "_comment": "Foundation-1 (stable-audio-open-1.0) architecture at 3s crop (44100 × 3 = 132300 samples). Matches pre_encode.py default --sample-size and Vertex SAMPLE_SIZE. CLAP path is a placeholder; runtime images mount real weights.",
+    "_comment": "Foundation-1 (stable-audio-open-1.0) architecture at 3s crop (44100 × 3 = 132300 samples). CRITICAL: pre_encode.py MUST be run with --sample-size 132300 to match this config. Latent tokens = sample_size / downsampling_ratio = 132300 / 1024 ≈ 129. Mismatched sample_size causes tensor shape errors during training (see ADR-002). CLAP path is a placeholder; runtime images mount real weights.",
     "model_type": "diffusion_cond",
     "sample_size": 132300,
     "sample_rate": 44100,

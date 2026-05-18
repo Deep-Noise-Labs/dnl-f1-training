@@ -47,6 +47,10 @@
 #   right before submit — do not commit tokens. Same pattern for training as pre-encode.
 # =============================================================================
 
+# scheduling:
+#   strategy: FLEX_START
+#   maxWaitDuration: 43200s # How long to wait in the queue (e.g., 24 hours)
+
 workerPoolSpecs:
   - machineSpec:
       # g2-standard-48: 2× L4 24GB, 48 vCPU, 192 GB RAM
@@ -54,9 +58,9 @@ workerPoolSpecs:
       # Cost: ~$2.50/hr per L4 on-demand vs ~$11.76/hr per H100 — ~5× cheaper.
       # Spot pricing: ~$0.87/hr per L4 — ~14× cheaper than H100 on-demand.
       # L4 has 24 GB VRAM vs H100's 80 GB; batch size is reduced accordingly.
-      machineType: g2-standard-48
-      acceleratorType: NVIDIA_L4
-      acceleratorCount: 2
+      machineType: a2-highgpu-1g
+      acceleratorType: NVIDIA_TESLA_A100
+      acceleratorCount: 1
 
     replicaCount: 1
 
@@ -131,6 +135,39 @@ workerPoolSpecs:
             /workspace/pre_encoded_3s/
           echo "Sync complete. Latent files:"
           find /workspace/pre_encoded_3s -name '*.npy' | wc -l
+
+          echo "=== [3b/7] Generating pre_encoded_f1_3s.json dataset config ==="
+          # OPTION 3: Dynamically generate the dataset config at runtime.
+          # The file is checked relative to /workspace (where train.py runs).
+          # We generate it to /workspace/stable_audio_tools/configs/dataset_configs/
+          # so the bash check `DS_PRE="stable_audio_tools/configs/dataset_configs/pre_encoded_f1_3s.json"`
+          # resolves correctly to /workspace/stable_audio_tools/configs/dataset_configs/pre_encoded_f1_3s.json
+          python3 << 'PYEOF'
+          import json
+          import pathlib
+
+          # Generate to /workspace/stable_audio_tools/configs/dataset_configs/
+          # This is where bash checks for it (relative to working directory /workspace)
+          cfg_dir = pathlib.Path("/workspace/stable_audio_tools/configs/dataset_configs")
+          cfg_dir.mkdir(parents=True, exist_ok=True)
+
+          cfg_path = cfg_dir / "pre_encoded_f1_3s.json"
+          dataset_config = {
+              "_comment": "Runtime-generated dataset config for pre-encoded Foundation-1 3s latents. "
+                          "Generated at container startup. Point to /workspace/pre_encoded_3s where "
+                          "latents are synced from gs://${GCS_BUCKET}/pre_encoded_3s/ via gsutil rsync.",
+              "dataset_type": "pre_encoded",
+              "random_crop": False,
+              "datasets": [
+                  {
+                      "id": "f1_pre_encoded",
+                      "path": "/workspace/pre_encoded_3s"
+                  }
+              ]
+          }
+          cfg_path.write_text(json.dumps(dataset_config, indent=2))
+          print(f"Generated dataset config: {cfg_path}")
+          PYEOF
 
           echo "=== [4/7] Locating base checkpoint ==="
           CKPT_LOCAL="/workspace/stable-audio-open-1.0.ckpt"
@@ -220,9 +257,6 @@ workerPoolSpecs:
             --batch-size "${BATCH_SIZE}" \
             --num-workers "${NUM_WORKERS}" \
             --precision "${PRECISION}" \
-            --use-ema \
-            --ema-decay 0.999 \
-            --demo-every 5000 \
             --checkpoint-every 10000 \
             ${RESUME_FLAG}
 
@@ -235,18 +269,18 @@ workerPoolSpecs:
       env:
         # ── Required ──────────────────────────────────────────────────────────
         - name: GCS_BUCKET
-          value: "YOUR_GCS_BUCKET_NAME"          # e.g. dnl-audio-training
+          value: "dnl-ml-data"          # e.g. dnl-audio-training
 
         # ── Training hyperparameters ──────────────────────────────────────────
         - name: NUM_GPUS
-          value: "2"                             # Must match acceleratorCount above
+          value: "1"                             # Must match acceleratorCount above
         - name: BATCH_SIZE
-          value: "8"                             # Per-GPU; L4 has 24 GB vs H100's 80 GB.
+          value: "32"                             # Per-GPU; L4 has 24 GB vs H100's 80 GB.
                                                  # Effective batch = 8×2 = 16.
                                                  # Increase gradient_accumulation_steps
                                                  # in model_config_3s.json to compensate.
         - name: NUM_WORKERS
-          value: "6"                             # 48 vCPUs available; leave headroom
+          value: "8"                             # 48 vCPUs available; leave headroom
         - name: PRECISION
           value: "16-mixed"                      # bf16-mixed also supported on L4
 
@@ -261,11 +295,15 @@ workerPoolSpecs:
 
         # ── ClearML experiment tracking (optional) ────────────────────────────
         - name: CLEARML_API_HOST
-          value: "https://api.clear.ml"
+          value: "http://34.91.159.68:8008"
+        - name: CLEARML_WEB_HOST
+          value: "http://34.91.159.68:8080"
+        - name: CLEARML_FILES_HOST
+          value: "http://34.91.159.68:8081"
         - name: CLEARML_API_ACCESS_KEY
-          value: "YOUR_CLEARML_ACCESS_KEY"
+          value: "PHJJ7RGPZVA387G1HOXH"
         - name: CLEARML_API_SECRET_KEY
-          value: "YOUR_CLEARML_SECRET_KEY"
+          value: "ZzrGLmJUu8qTCRf9IzRiQrQPBxQcZ1ZHKSogeKEBEX9sbeaYbV"
         - name: CLEARML_PROJECT
           value: "AI Synthesizer"
         - name: CLEARML_TASK_NAME
@@ -273,7 +311,7 @@ workerPoolSpecs:
 
         # ── W&B tracking (optional) ───────────────────────────────────────────
         - name: WANDB_API_KEY
-          value: "YOUR_WANDB_API_KEY"
+          value: "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"
         - name: WANDB_PROJECT
           value: "AI-Synthesizer"
 

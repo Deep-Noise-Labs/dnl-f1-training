@@ -223,7 +223,7 @@ workerPoolSpecs:
       env:
         # ── Required ──────────────────────────────────────────────────────────
         - name: GCS_BUCKET
-          value: "your-bucket-name"          # e.g. dnl-audio-training
+          value: "dnl-ml-data"          # e.g. dnl-audio-training
 
         # ── Pre-encoding hyperparameters ──────────────────────────────────────
         - name: SAMPLE_SIZE
@@ -248,15 +248,15 @@ workerPoolSpecs:
         # Leave YOUR_* placeholders; inject real values at submit time (do not commit secrets).
         # For self-hosted ClearML server, you need ALL of these hosts configured:
         - name: CLEARML_API_HOST
-          value: "https://api.clear.ml"
+          value: "http://34.91.159.68:8008"
         - name: CLEARML_WEB_HOST
-          value: "https://app.clear.ml"
+          value: "http://34.91.159.68:8080"
         - name: CLEARML_FILES_HOST
-          value: "https://files.clear.ml"
+          value: "http://34.91.159.68:8081"
         - name: CLEARML_API_ACCESS_KEY
-          value: "YOUR_CLEARML_ACCESS_KEY"
+          value: "PHJJ7RGPZVA387G1HOXH"
         - name: CLEARML_API_SECRET_KEY
-          value: "YOUR_CLEARML_SECRET_KEY"
+          value: "ZzrGLmJUu8qTCRf9IzRiQrQPBxQcZ1ZHKSogeKEBEX9sbeaYbV"
         - name: CLEARML_PROJECT
           value: "AI Synthesizer"
         - name: CLEARML_TASK_NAME
