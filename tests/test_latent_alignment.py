@@ -133,6 +133,71 @@ class TestVertexYamlSampleSize:
 
 
 # ---------------------------------------------------------------------------
+# EXPECTED_LATENT_SHAPE constant tests  (no torch required — always run in CI)
+# ---------------------------------------------------------------------------
+class TestExpectedLatentShapeConstant:
+    """Verify that PreEncodedLatentsDataset.EXPECTED_LATENT_SHAPE is consistent
+    with model_config_3s.json and the ADP U-Net stride requirement.
+
+    This class guards against the exact bug that caused the second training
+    failure: EXPECTED_LATENT_SHAPE was (64, 129) while the dataset had been
+    re-encoded with sample_size=131072 → 128 tokens, causing a ValueError
+    in _validate_latent_shapes before any training step ran.
+    """
+
+    def _load_config(self):
+        cfg_path = REPO_ROOT / "models" / "foundation1_3s" / "model_config_3s.json"
+        return json.loads(cfg_path.read_text())
+
+    def _get_expected_shape_from_source(self):
+        """Parse EXPECTED_LATENT_SHAPE directly from dataset.py source without importing torch."""
+        import re
+        src = (REPO_ROOT / "stable_audio_tools" / "data" / "dataset.py").read_text()
+        m = re.search(r"EXPECTED_LATENT_SHAPE\s*=\s*\((\d+),\s*(\d+)\)", src)
+        assert m, "EXPECTED_LATENT_SHAPE not found in dataset.py"
+        return int(m.group(1)), int(m.group(2))
+
+    def test_expected_shape_channels_is_64(self):
+        """Channel dimension of EXPECTED_LATENT_SHAPE must be 64 (io_channels)."""
+        channels, _ = self._get_expected_shape_from_source()
+        assert channels == 64, (
+            f"EXPECTED_LATENT_SHAPE channels={channels}, expected 64 (io_channels from model config)."
+        )
+
+    def test_expected_shape_tokens_matches_model_config(self):
+        """Token dimension of EXPECTED_LATENT_SHAPE must equal sample_size / VAE ratio."""
+        cfg = self._load_config()
+        sample_size = cfg["sample_size"]
+        vae_ratio = cfg["model"]["pretransform"]["config"]["downsampling_ratio"]
+        expected_tokens = sample_size // vae_ratio
+        _, actual_tokens = self._get_expected_shape_from_source()
+        assert actual_tokens == expected_tokens, (
+            f"EXPECTED_LATENT_SHAPE tokens={actual_tokens} does not match "
+            f"model_config sample_size={sample_size} / VAE ratio={vae_ratio} = {expected_tokens}. "
+            f"Update EXPECTED_LATENT_SHAPE in dataset.py to (64, {expected_tokens})."
+        )
+
+    def test_expected_shape_tokens_is_128(self):
+        """Token dimension must be 128 after the sample_size=131072 fix."""
+        _, tokens = self._get_expected_shape_from_source()
+        assert tokens == 128, (
+            f"EXPECTED_LATENT_SHAPE tokens={tokens}, expected 128. "
+            "If sample_size changed, update EXPECTED_LATENT_SHAPE accordingly."
+        )
+
+    def test_expected_shape_tokens_divisible_by_adp_stride(self):
+        """Token dimension must be divisible by ADP U-Net temporal stride (16)."""
+        cfg = self._load_config()
+        factors = cfg["model"]["diffusion"]["config"]["factors"]
+        adp_stride = math.prod(factors)
+        _, tokens = self._get_expected_shape_from_source()
+        assert tokens % adp_stride == 0, (
+            f"EXPECTED_LATENT_SHAPE tokens={tokens} is not divisible by ADP stride={adp_stride}. "
+            f"This will cause a skip-connection RuntimeError during training."
+        )
+
+
+# ---------------------------------------------------------------------------
 # Dataset crop unit tests  (requires torch + numpy)
 # ---------------------------------------------------------------------------
 def _make_latent_pair(tmp_dir: pathlib.Path, time_steps: int, channels: int = 64):

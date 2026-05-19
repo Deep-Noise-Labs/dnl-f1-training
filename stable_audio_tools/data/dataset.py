@@ -241,10 +241,12 @@ class PreEncodedLatentsDataset(torch.utils.data.Dataset):
     """
 
     # Expected latent dimensions for Foundation-1 3s config:
-    #   sample_size = 132300 (44100 Hz × 3s)
-    #   downsampling_ratio = 1024 → latent_tokens = 132300 / 1024 ≈ 129
+    #   sample_size = 131072 (= 128 × 1024, aligned to ADP U-Net stride=16)
+    #   downsampling_ratio = 1024 → latent_tokens = 131072 / 1024 = 128
     #   io_channels = 64
-    EXPECTED_LATENT_SHAPE = (64, 129)  # (channels, tokens)
+    # Previously 132300 (44100 Hz × 3s) → 129 tokens (129 % 16 = 1), which caused
+    # a skip-connection RuntimeError.  Updated to 131072 in model_config_3s.json.
+    EXPECTED_LATENT_SHAPE = (64, 128)  # (channels, tokens)
 
     def __init__(
         self,
@@ -283,7 +285,7 @@ class PreEncodedLatentsDataset(torch.utils.data.Dataset):
         """Validate that latents have the expected shape for Foundation-1 3s config.
 
         This catches pre-encoding misconfigurations where --sample-size was set
-        to the wrong value (e.g., default 1320960 instead of 132300).
+        to the wrong value (e.g., default 1320960 instead of 131072).
 
         Args:
             sample_size: Number of random files to sample for validation.
@@ -315,7 +317,7 @@ class PreEncodedLatentsDataset(torch.utils.data.Dataset):
                         f"{npy_p}: shape {arr.shape} — "
                         f"expected ({expected_channels}, {expected_tokens}). "
                         f"This latent was likely encoded with sample_size={derived_sample_size}. "
-                        f"Verify pre_encode.py --sample-size matches model config (132300 for 3s)."
+                        f"Verify pre_encode.py --sample-size matches model config ({expected_tokens * 1024} for 3s, i.e. {expected_tokens} tokens)."
                     )
             except Exception as e:
                 mismatches.append(f"{npy_p}: failed to load: {e}")
