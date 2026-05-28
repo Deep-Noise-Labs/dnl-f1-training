@@ -269,13 +269,15 @@ workerPoolSpecs:
       env:
         # ── Required ──────────────────────────────────────────────────────────
         - name: GCS_BUCKET
-          value: "dnl-ml-data"          # e.g. dnl-audio-training
+          value: ""          # e.g. dnl-audio-training
 
         # ── Training hyperparameters ──────────────────────────────────────────
+        - name: MAX_STEPS
+          value: "130000"                        # Target training steps (default for 130k epochs equivalent)
         - name: NUM_GPUS
           value: "1"                             # Must match acceleratorCount above
         - name: BATCH_SIZE
-          value: "32"                             # Per-GPU; L4 has 24 GB vs H100's 80 GB.
+          value: "64"                             # Per-GPU; L4 has 24 GB vs H100's 80 GB.
                                                  # Effective batch = 8×2 = 16.
                                                  # Increase gradient_accumulation_steps
                                                  # in model_config_3s.json to compensate.
@@ -295,23 +297,23 @@ workerPoolSpecs:
 
         # ── ClearML experiment tracking (optional) ────────────────────────────
         - name: CLEARML_API_HOST
-          value: "http://34.91.159.68:8008"
+          value: ""
         - name: CLEARML_WEB_HOST
-          value: "http://34.91.159.68:8080"
+          value: ""
         - name: CLEARML_FILES_HOST
-          value: "http://34.91.159.68:8081"
+          value: ""
         - name: CLEARML_API_ACCESS_KEY
-          value: "PHJJ7RGPZVA387G1HOXH"
+          value: ""
         - name: CLEARML_API_SECRET_KEY
-          value: "ZzrGLmJUu8qTCRf9IzRiQrQPBxQcZ1ZHKSogeKEBEX9sbeaYbV"
+          value: ""
         - name: CLEARML_PROJECT
           value: "AI Synthesizer"
         - name: CLEARML_TASK_NAME
-          value: "Foundation-1 Finetune (initial train)"
+          value: "Foundation-1 Finetune (repeated train, larger disk VM)"
 
         # ── W&B tracking (optional) ───────────────────────────────────────────
         - name: WANDB_API_KEY
-          value: "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"
+          value: ""
         - name: WANDB_PROJECT
           value: "AI-Synthesizer"
 

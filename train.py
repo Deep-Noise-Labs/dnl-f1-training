@@ -33,6 +33,10 @@ def main():
 
     args = get_all_args()
 
+    # Override max_epochs with max_steps if specified via environment variable
+    max_steps_str = os.environ.get('MAX_STEPS')
+    max_steps = int(max_steps_str) if max_steps_str else None
+
     seed = args.seed
 
     # Set a different seed for each process if using SLURM
@@ -135,7 +139,7 @@ def main():
         callbacks=[ckpt_callback, demo_callback, exc_callback, save_model_config_callback, clearml_callback],
         logger=wandb_logger,
         log_every_n_steps=1,
-        max_epochs=10000000,
+        max_steps=max_steps if max_steps is not None else 10000000,
         default_root_dir=args.save_dir,
         gradient_clip_val=args.gradient_clip_val,
         reload_dataloaders_every_n_epochs = 0
