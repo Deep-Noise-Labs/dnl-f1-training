@@ -251,7 +251,7 @@ class ClearMLTrainingCallback(pl.Callback):
     Logs:
       - Training step loss scalars (series: "train/loss")
       - GPU memory usage per step (series: "system/gpu_mem_gb")
-      - Checkpoint paths as ClearML artifacts on every save
+      - Local checkpoint directory path as a task parameter (no zip upload)
       - Audio demo WAV files as debug samples (call log_audio_demo() manually
         from your demo callback)
 
@@ -328,17 +328,20 @@ class ClearMLTrainingCallback(pl.Callback):
         pl_module: pl.LightningModule,
         checkpoint: dict,
     ) -> None:
-        """Register the checkpoint path as a ClearML artifact."""
+        """Record local checkpoint directory on the task (no artifact zip).
+
+        Uploading the checkpoint directory as a ClearML artifact zips the entire
+        folder under ``$TMPDIR`` (often on the small root volume). F1 checkpoints
+        are ~15 GB each; use the on-disk path under ``SAVE_DIR`` on ``/data``.
+        """
         if self.task is None:
             return
-        # The actual file path is set by ModelCheckpoint; we can only
-        # register the directory here. The file will be registered once
-        # ModelCheckpoint writes it (see on_train_epoch_end workaround).
         ckpt_dir = trainer.checkpoint_callback.dirpath if trainer.checkpoint_callback else None
         if ckpt_dir:
-            self.task.upload_artifact(
-                f"checkpoint_dir_step_{trainer.global_step}",
-                artifact_object=str(ckpt_dir),
+            self.task.set_parameter(
+                "checkpoint_dir",
+                str(ckpt_dir),
+                description="Local ModelCheckpoint dir (on SAVE_DIR, not uploaded)",
             )
 
     # ------------------------------------------------------------------

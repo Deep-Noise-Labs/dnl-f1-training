@@ -125,7 +125,14 @@ def main():
     else:
         checkpoint_dir = None
 
-    ckpt_callback = pl.callbacks.ModelCheckpoint(every_n_train_steps=args.checkpoint_every, dirpath=checkpoint_dir, save_top_k=-1)
+    # Keep only the most recent N checkpoints (~15 GB each). save_top_k=-1 fills /data fast.
+    save_top_k = int(os.environ.get("CHECKPOINT_SAVE_TOP_K", "2"))
+    ckpt_callback = pl.callbacks.ModelCheckpoint(
+        every_n_train_steps=args.checkpoint_every,
+        dirpath=checkpoint_dir,
+        save_top_k=save_top_k,
+        save_last=True,
+    )
     save_model_config_callback = ModelConfigEmbedderCallback(model_config)
 
     demo_callback = create_demo_callback_from_config(model_config, demo_dl=train_dl)

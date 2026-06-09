@@ -115,6 +115,23 @@ bash scripts/clearml/register_train_template.sh
 
 Watch ClearML scalars **`:monitor:gpu`** and **GPU Memory (GB)**. Target ~70–75 GB allocated and sustained high utilization; if util is low, increase `NUM_WORKERS` or move latents to local SSD.
 
+## 8. Disk layout (avoid root `/` filling up)
+
+| Volume | Size | Use for |
+|--------|------|---------|
+| `/` (root) | ~193 GB | OS, `/tmp` — **fills quickly** |
+| `/data` | ~23 TB | latents, checkpoints, `TMPDIR` |
+
+Each F1 checkpoint is **~15 GB**. Defaults in `train_task.env.example`:
+
+- `SAVE_DIR=/data/checkpoints/...` — keep checkpoints on `/data`
+- `CHECKPOINT_SAVE_TOP_K=2` — retain only the last two periodic saves (+ `save_last`)
+- `TMPDIR=/data/tmp` — ClearML zip staging and runtime JSON off root
+
+**Do not** upload the whole checkpoint directory to ClearML as an artifact (zips under `/tmp`). The training callback records the local path as a task parameter instead.
+
+If root is full, check `du -sh /tmp/artifacts_*` for stale failed uploads and remove them.
+
 ## Files
 
 | File | Role |

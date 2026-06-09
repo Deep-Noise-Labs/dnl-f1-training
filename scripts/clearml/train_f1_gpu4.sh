@@ -29,6 +29,10 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-4}"
 export NVIDIA_VISIBLE_DEVICES="${NVIDIA_VISIBLE_DEVICES:-${CUDA_VISIBLE_DEVICES}}"
 export USE_WANDB="${USE_WANDB:-0}"
 
+# Avoid ClearML zip staging on the small root volume (default /tmp ≈ 193 GB /).
+export TMPDIR="${TMPDIR:-/data/tmp}"
+mkdir -p "${TMPDIR}"
+
 : "${PRE_ENCODED_PATH:?Set PRE_ENCODED_PATH in train_task.env}"
 : "${PRETRAINED_CKPT_PATH:?Set PRETRAINED_CKPT_PATH in train_task.env}"
 : "${MODEL_CONFIG:=${REPO_ROOT}/models/foundation1_3s/model_config_3s.json}"
@@ -39,7 +43,7 @@ export CLEARML_PROJECT
 export CLEARML_TASK_NAME="${CLEARML_TASK_NAME:-f1-3s-gpu4-$(date +%Y%m%d-%H%M)}"
 
 # Runtime dataset config (pre-encoded latents on local disk).
-RUNTIME_DATASET_CONFIG="${RUNTIME_DATASET_CONFIG:-/tmp/f1_dataset_pre_encoded_runtime.json}"
+RUNTIME_DATASET_CONFIG="${RUNTIME_DATASET_CONFIG:-${TMPDIR}/f1_dataset_pre_encoded_runtime.json}"
 python3 - <<PY
 import json, os
 from pathlib import Path

@@ -7,6 +7,11 @@ wait_marker step4.done
 wait_marker step5.done
 
 log "=== Step 6: DiT fine-tune on GPU 4 ==="
+
+# ClearML and zip helpers use $TMPDIR; default /tmp is on the 193 GB root volume.
+export TMPDIR="${TMPDIR:-/data/tmp}"
+mkdir -p "${TMPDIR}"
+
 activate_venv
 export CLEARML_TRAIN_ENV="${REPO_ROOT}/scripts/clearml/train_task.env"
 # shellcheck source=/dev/null
@@ -18,8 +23,8 @@ export USE_WANDB=0
 export CLEARML_PROJECT
 export CLEARML_TASK_NAME="${CLEARML_TASK_NAME:-f1-instrs-gpu4-$(date +%Y%m%d-%H%M)}"
 
-RUNTIME_DATASET_CONFIG="/tmp/f1_dataset_pre_encoded_runtime.json"
-RUNTIME_MODEL_CONFIG="/tmp/model_config_train_runtime.json"
+RUNTIME_DATASET_CONFIG="${TMPDIR}/f1_dataset_pre_encoded_runtime.json"
+RUNTIME_MODEL_CONFIG="${TMPDIR}/model_config_train_runtime.json"
 
 python - <<PY
 import json
