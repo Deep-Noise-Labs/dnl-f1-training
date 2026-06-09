@@ -23,8 +23,10 @@ Accepted (2026-04-27)
 
 1. **Python support band (this fork):** `requires-python = ">=3.8"` in `pyproject.toml`. **First-class** validation targets are **3.10** (Docker/NGC) and **3.11** (GitHub Actions `lint-and-test`, GCE `bootstrap_vm.sh` / `setup_python_env.sh` default). We run the full non-Docker `pytest` suite on **both**; packaging builds (`pip wheel` / `pip install`, `--no-deps`) are verified to succeed on 3.11+ for the sdist/bdist of `stable-audio-tools`.
 2. **Documentation:** Root `README.md` retains upstream text where possible; a pointer to this ADR and to `README_DNL.md` clarifies the fork. **Do not** treat the upstream "use only 3.10" note as the single source of truth for DNL.
-3. **`uv` (adoption):** Treat **`uv` as an optional** accelerator for **local** environments, not a replacement for the production install path. Recommended pattern:
-   - `uv venv -p 3.11` (or 3.10) then `uv pip install -U pip setuptools wheel` and install `requirements/*.txt` in the same order as `setup_python_env.sh` / the Dockerfile, then `pip install -e . --no-deps` (or a wheel of the project). This preserves **one** source of requirements (`setup.py` + `requirements/`) and avoids a half-migrated `uv.lock` that drifts from Docker.
+3. **`uv` (adoption):** Use **`uv` for local venvs and tests**; production remains pip in Docker/Vertex. Patterns:
+   - **Pytest only:** `uv sync --only-dev --no-install-project` then `.venv/bin/pytest tests/ ...` (avoid bare `uv run`, which re-resolves `setup.py` deps; see `.python-version` → 3.11).
+   - **GPU training on bare metal:** `bash scripts/clearml/install_training_env.sh` then `uv pip install -r requirements/{base,train}.txt` and `uv pip install -e . --no-deps`.
+   - Avoid bare `uv sync` without flags — it resolves the full `setup.py` dependency tree (heavy; some pins are 3.10-only).
 4. **No compulsory deprecation** of `setup.py` in this change set; if we later standardize on `uv.lock`, do it as a **gated** migration with CI + Docker both switched and `install_requires` consolidated into `pyproject` under review.
 
 ## Consequences
@@ -36,11 +38,9 @@ Accepted (2026-04-27)
 ## Verification (repeatable)
 
 ```bash
-# With uv and Python 3.11 and 3.10 interpreters available:
-uv venv /tmp/venv-311 -p 3.11
-uv pip install --python /tmp/venv-311/bin/python pip pytest pyyaml
-# From repo root:
-uv run --python /tmp/venv-311/bin/python -m pytest tests/ --ignore=tests/test_docker_build.py
+# From repo root (Python 3.11 via .python-version):
+uv sync --only-dev --no-install-project
+.venv/bin/pytest tests/ --ignore=tests/test_docker_build.py -v
 
 # Or after: uv pip install --python /tmp/venv-311/bin/python pip setuptools wheel
 # /tmp/venv-311/bin/python -m pip wheel . --no-deps -w /tmp/wheel-out

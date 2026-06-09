@@ -90,19 +90,19 @@ The prompt format follows the Foundation-1 tagging schema:
 
 The upstream `README.md` still says to use only Python 3.10; that was written before this fork **relaxed** the `scipy` pin for 3.11 wheels. This fork’s **supported** local/CI range is **3.10 and 3.11** (see [ADR-001: Python and package management](docs/decisions/001-python-and-package-management.md)).
 
-**Optional: `uv` for local installs** — You can use [uv](https://github.com/astral-sh/uv) to create a venv and install faster; it does **not** replace the `pip` + `requirements/*.txt` path used in Docker/Vertex. Example:
+**Local / server workflow with `uv`** — Pin **Python 3.11** (see `.python-version`). The `dev` dependency group in `pyproject.toml` supplies pytest for fast checks; GPU training deps are installed via `scripts/clearml/install_training_env.sh` (same `requirements/*.txt` order as Docker).
 
 ```bash
-uv venv -p 3.11
-source .venv/bin/activate   # or: .venv\Scripts\activate on Windows
-uv pip install -U pip setuptools wheel
-# Install torch the same way as in scripts/setup_python_env.sh (CUDA or CPU), then:
-uv pip install -r requirements/base.txt
-# ... encode.txt / train.txt as needed
-uv pip install -e . --no-deps
+uv sync --only-dev --no-install-project   # pytest only
+.venv/bin/pytest tests/ --ignore=tests/test_docker_build.py -v
+
+bash scripts/clearml/install_training_env.sh   # .venv + torch + train stack
+source .venv/bin/activate
 ```
 
-A full `uv`/`uv.lock`-only workflow would duplicate or move metadata out of `setup.py`; we are not doing that until CI and the Docker build are switched together (see the ADR).
+**ClearML on GPU 4:** [`scripts/clearml/README.md`](scripts/clearml/README.md).
+
+Docker/Vertex still use `pip` in the image build; a `uv.lock`-only production path is deferred ([ADR-001](docs/decisions/001-python-and-package-management.md)).
 
 ### 1. Clone this repository
 

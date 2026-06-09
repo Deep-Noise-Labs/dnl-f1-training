@@ -345,6 +345,39 @@ class ClearMLTrainingCallback(pl.Callback):
     # Public helper: log an audio demo file
     # ------------------------------------------------------------------
 
+    def log_scalar(
+        self,
+        title: str,
+        series: str,
+        value: float,
+        step: int,
+    ) -> None:
+        if self._clearml_logger is None:
+            return
+        self._clearml_logger.report_scalar(
+            title=title,
+            series=series,
+            value=float(value),
+            iteration=step,
+        )
+
+    def log_image(
+        self,
+        image,
+        step: int,
+        title: str = "Debug",
+        series: str = "melspec",
+    ) -> None:
+        """Log a PIL/ndarray image (e.g. from audio_spectrogram_image)."""
+        if self._clearml_logger is None:
+            return
+        self._clearml_logger.report_image(
+            title=title,
+            series=series,
+            iteration=step,
+            image=image,
+        )
+
     def log_audio_demo(
         self,
         audio_path: str,
@@ -392,6 +425,34 @@ class ClearMLTrainingCallback(pl.Callback):
                 print_console=False,
             )
         self.task.close()
+
+
+def get_clearml_training_callback(trainer: pl.Trainer) -> Optional[ClearMLTrainingCallback]:
+    """Return ClearMLTrainingCallback from trainer.callbacks, if present."""
+    for cb in trainer.callbacks:
+        if isinstance(cb, ClearMLTrainingCallback):
+            return cb
+    return None
+
+
+def log_demo_media_to_clearml(
+    trainer: pl.Trainer,
+    step: int,
+    wav_path: str,
+    melspec_image=None,
+    audio_series: str = "generated",
+    image_series: str = "melspec",
+) -> None:
+    """
+    Mirror W&B demo logging (wandb.Audio + wandb.Image) into ClearML debug samples.
+    No-op when ClearML is disabled or callback is absent.
+    """
+    cb = get_clearml_training_callback(trainer)
+    if cb is None:
+        return
+    cb.log_audio_demo(wav_path, step=step, series=audio_series)
+    if melspec_image is not None:
+        cb.log_image(melspec_image, step=step, series=image_series)
 
 
 # ---------------------------------------------------------------------------

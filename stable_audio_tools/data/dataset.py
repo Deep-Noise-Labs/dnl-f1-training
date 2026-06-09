@@ -18,6 +18,7 @@ from pedalboard.io import AudioFile
 from torchaudio import transforms as T
 from typing import Optional, Callable, List, Tuple
 
+from .sidecar_metadata import merge_audio_json_sidecar
 from .utils import Stereo, Mono, PhaseFlipper, PadCrop_Normalized_T
 
 AUDIO_KEYS = ("flac", "wav", "mp3", "m4a", "ogg", "opus")
@@ -215,6 +216,8 @@ class SampleDataset(torch.utils.data.Dataset):
 
             info["load_time"] = end_time - start_time
 
+            merge_audio_json_sidecar(info, audio_filename)
+
             for custom_md_path in self.custom_metadata_fns.keys():
                 if custom_md_path in audio_filename:
                     custom_metadata_fn = self.custom_metadata_fns[custom_md_path]
@@ -379,6 +382,11 @@ class PreEncodedLatentsDataset(torch.utils.data.Dataset):
 
             with open(json_p, "r", encoding="utf-8") as f:
                 info = json.load(f)
+
+            if "prompt" not in info:
+                wav_path = info.get("path")
+                if wav_path:
+                    merge_audio_json_sidecar(info, wav_path)
 
             if "text" in info and "prompt" not in info:
                 info["prompt"] = info["text"]

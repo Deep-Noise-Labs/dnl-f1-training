@@ -40,3 +40,15 @@ addopts = "-v --tb=short"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
+
+# ---------------------------------------------------------------------------
+# uv — local dev and tests (production Docker/Vertex still use pip + requirements/)
+# ---------------------------------------------------------------------------
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "pyyaml>=6.0",
+]
+
+[tool.uv]
+default-groups = ["dev"]

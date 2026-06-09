@@ -1,3 +1,5 @@
+import logging
+
 from prefigure.prefigure import get_all_args, push_wandb_config
 import json
 import os
@@ -91,13 +93,35 @@ def main():
         log_every_n_steps=100,
     )
 
-    wandb_logger = pl.loggers.WandbLogger(project=args.name)
-    wandb_logger.watch(training_wrapper)
+    use_wandb = os.environ.get("USE_WANDB", "0").lower() in ("1", "true", "yes")
+    wandb_logger = None
+    if use_wandb:
+        wandb_logger = pl.loggers.WandbLogger(project=args.name)
+        wandb_logger.watch(training_wrapper)
+    else:
+        logging.getLogger(__name__).info(
+            "W&B disabled (USE_WANDB=0). Using ClearML + PL self.log_dict for metrics."
+        )
 
     exc_callback = ExceptionCallback()
-    
-    if args.save_dir and isinstance(wandb_logger.experiment.id, str):
-        checkpoint_dir = os.path.join(args.save_dir, wandb_logger.experiment.project, wandb_logger.experiment.id, "checkpoints") 
+
+    if args.save_dir:
+        if wandb_logger is not None and isinstance(wandb_logger.experiment.id, str):
+            checkpoint_dir = os.path.join(
+                args.save_dir,
+                wandb_logger.experiment.project,
+                wandb_logger.experiment.id,
+                "checkpoints",
+            )
+        elif clearml_task is not None:
+            checkpoint_dir = os.path.join(
+                args.save_dir,
+                clearml_task.project,
+                clearml_task.id,
+                "checkpoints",
+            )
+        else:
+            checkpoint_dir = os.path.join(args.save_dir, args.name, "checkpoints")
     else:
         checkpoint_dir = None
 
@@ -110,7 +134,8 @@ def main():
     args_dict = vars(args)
     args_dict.update({"model_config": model_config})
     args_dict.update({"dataset_config": dataset_config})
-    push_wandb_config(wandb_logger, args_dict)
+    if wandb_logger is not None:
+        push_wandb_config(wandb_logger, args_dict)
 
     #Set multi-GPU strategy if specified
     if args.strategy:
@@ -137,7 +162,7 @@ def main():
         precision=args.precision,
         accumulate_grad_batches=args.accum_batches, 
         callbacks=[ckpt_callback, demo_callback, exc_callback, save_model_config_callback, clearml_callback],
-        logger=wandb_logger,
+        logger=wandb_logger if wandb_logger is not None else True,
         log_every_n_steps=1,
         max_steps=max_steps if max_steps is not None else 10000000,
         default_root_dir=args.save_dir,

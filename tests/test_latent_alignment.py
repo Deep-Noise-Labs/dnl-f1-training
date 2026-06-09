@@ -198,6 +198,42 @@ class TestExpectedLatentShapeConstant:
 
 
 # ---------------------------------------------------------------------------
+# Sidecar conditioning merge tests  (no torch required)
+# ---------------------------------------------------------------------------
+def _load_merge_audio_json_sidecar():
+    """Import sidecar helper without pulling in stable_audio_tools (requires torch)."""
+    path = REPO_ROOT / "stable_audio_tools" / "data" / "sidecar_metadata.py"
+    spec = importlib.util.spec_from_file_location("sidecar_metadata", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.merge_audio_json_sidecar
+
+
+class TestMergeAudioJsonSidecar:
+    """merge_audio_json_sidecar must supply prompt for CLAP when latent JSON omits it."""
+
+    def test_merges_text_into_prompt(self, tmp_path):
+        merge_audio_json_sidecar = _load_merge_audio_json_sidecar()
+
+        wav_path = tmp_path / "clip.wav"
+        wav_path.touch()
+        sidecar = {"text": "Synth pad, warm, C3", "seconds_start": 0, "seconds_total": 3}
+        (tmp_path / "clip.json").write_text(json.dumps(sidecar))
+
+        info = merge_audio_json_sidecar({}, str(wav_path))
+        assert info["prompt"] == sidecar["text"]
+        assert info["seconds_total"] == 3
+
+    def test_no_op_when_sidecar_missing(self, tmp_path):
+        merge_audio_json_sidecar = _load_merge_audio_json_sidecar()
+
+        wav_path = tmp_path / "missing.wav"
+        wav_path.touch()
+        info = merge_audio_json_sidecar({"seconds_start": 0}, str(wav_path))
+        assert "prompt" not in info
+
+
+# ---------------------------------------------------------------------------
 # Dataset crop unit tests  (requires torch + numpy)
 # ---------------------------------------------------------------------------
 def _make_latent_pair(tmp_dir: pathlib.Path, time_steps: int, channels: int = 64):
@@ -288,3 +324,34 @@ class TestPreEncodedLatentsDatasetCrop:
             "ADP U-Net factors=[1,2,2,4] require stride=16; "
             f"_LATENT_TIME_MULTIPLE={PreEncodedLatentsDataset._LATENT_TIME_MULTIPLE}"
         )
+
+    def test_prompt_loaded_from_source_wav_sidecar(self, tmp_path, PreEncodedLatentsDataset):
+        """Latent JSON without prompt must resolve CLAP text from source WAV sidecar."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        wav_path = source_dir / "clip.wav"
+        wav_path.touch()
+        sidecar = {
+            "text": "Guitar, sharp-toned, analog, C3",
+            "seconds_start": 0,
+            "seconds_total": 3,
+        }
+        (source_dir / "clip.json").write_text(json.dumps(sidecar))
+
+        latent_dir = tmp_path / "latents" / "0"
+        latent_dir.mkdir(parents=True)
+        import numpy as np
+
+        arr = np.random.randn(64, 128).astype(np.float32)
+        np.save(latent_dir / "sample.npy", arr)
+        latent_meta = {
+            "path": str(wav_path),
+            "seconds_start": 0,
+            "seconds_total": 3,
+            "padding_mask": [1] * 128,
+        }
+        (latent_dir / "sample.json").write_text(json.dumps(latent_meta))
+
+        ds = PreEncodedLatentsDataset(root_path=str(latent_dir))
+        _, info = ds[0]
+        assert info["prompt"] == sidecar["text"]

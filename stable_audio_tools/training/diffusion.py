@@ -4,7 +4,12 @@ import random
 import torch
 import torchaudio
 import typing as tp
+import os
 import wandb
+
+from .clearml_tracking import log_demo_media_to_clearml
+
+_USE_WANDB = os.environ.get("USE_WANDB", "0").lower() in ("1", "true", "yes")
 
 from aeiou.viz import pca_point_cloud, audio_spectrogram_image, tokens_spectrogram_image
 import auraloss
@@ -541,19 +546,29 @@ class DiffusionCondDemoCallback(pl.Callback):
                 # Put the demos together
                 fakes = rearrange(fakes, 'b d n -> d (b n)')
 
-                log_dict = {}
-                
                 filename = f'demo_cfg_{cfg_scale}_{trainer.global_step:08}.wav'
                 fakes = fakes.div(torch.max(torch.abs(fakes))).mul(32767).to(torch.int16).cpu()
                 torchaudio.save(filename, fakes, self.sample_rate)
 
-                log_dict[f'demo_cfg_{cfg_scale}'] = wandb.Audio(filename,
-                                                    sample_rate=self.sample_rate,
-                                                    caption=f'Reconstructed')
-            
-                log_dict[f'demo_melspec_left_cfg_{cfg_scale}'] = wandb.Image(audio_spectrogram_image(fakes))
-
-                trainer.logger.experiment.log(log_dict)
+                melspec = audio_spectrogram_image(fakes)
+                log_demo_media_to_clearml(
+                    trainer,
+                    trainer.global_step,
+                    filename,
+                    melspec_image=melspec,
+                    audio_series=f"demo_cfg_{cfg_scale}",
+                    image_series=f"demo_melspec_cfg_{cfg_scale}",
+                )
+                if _USE_WANDB and getattr(trainer, "logger", None) and hasattr(trainer.logger, "experiment"):
+                    log_dict = {
+                        f'demo_cfg_{cfg_scale}': wandb.Audio(
+                            filename,
+                            sample_rate=self.sample_rate,
+                            caption='Reconstructed',
+                        ),
+                        f'demo_melspec_left_cfg_{cfg_scale}': wandb.Image(melspec),
+                    }
+                    trainer.logger.experiment.log(log_dict)
             
             del fakes
 

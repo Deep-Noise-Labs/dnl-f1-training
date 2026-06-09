@@ -37,6 +37,8 @@ BATCH_SIZE=16         # Per-GPU batch size. 16 fits on A100 80GB with pre-encode
 NUM_GPUS=2            # Number of GPUs. Adjust to match your instance (a3-highgpu-2g = 2× H100).
 PRECISION="16-mixed"  # bf16-mixed is also valid on A100/H100.
 CHECKPOINT_EVERY=5000 # Save a checkpoint every N steps.
+# W&B off by default — ClearML is the primary experiment tracker on this server.
+export USE_WANDB="${USE_WANDB:-0}"
 WANDB_PROJECT="foundation1-3s-finetune"
 
 # ---------------------------------------------------------------------------

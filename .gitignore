@@ -162,6 +162,12 @@ cython_debug/
 *.ckpt
 *.wav
 wandb/*
+
+# Local ClearML / training overrides (may contain secrets)
+scripts/clearml/train_task.env
+
+# Local pipeline run markers and logs
+.pipeline/
 *.mid
 *.safetensors
 *.png
