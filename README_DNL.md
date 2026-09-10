@@ -76,6 +76,21 @@ Each JSON file must contain a `text` field with the Foundation-1 conditioning pr
 The prompt format follows the Foundation-1 tagging schema:
 `{Instrument}, {timbre_tags}, {description}, {key}`
 
+### Full-sentence SFT dataset (natural-language prompts)
+
+The templated schema above can't represent a full request like "vintage synth
+with loud buzz" - there's no slot for a qualifier spanning two attributes at
+once. `scripts/build_sft_prompt_dataset.py` builds a second dataset, written
+by hand rather than derived from tags: a human reverse-engineers a full
+natural-language prompt for each of a batch of existing sounds, tagged with a
+curriculum difficulty tier (`kindergarten` / `first_grade` / `second_grade_plus`)
+and descriptor coverage (timbre, envelope, articulation, noise, era,
+instrument), then the tool exports the annotated pairs as WAV+JSON sidecars in
+the same format as above - so `text` holds the human prompt instead of the
+template, and the result drops straight into `pre_encode.py` / `train.py`
+alongside (or instead of) the templated dataset. See the script's module
+docstring for the `init-queue` / `report` / `export` workflow.
+
 ---
 
 ## Setup

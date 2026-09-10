@@ -24,6 +24,7 @@ SHELL_SCRIPTS = [
 
 PYTHON_SCRIPTS = [
     "scripts/convert_instrs_to_f1.py",
+    "scripts/build_sft_prompt_dataset.py",
     "scripts/smoke_test_gcs.py",
     "scripts/ds_zero_to_pl_ckpt.py",
     "pre_encode.py",
