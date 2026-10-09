@@ -250,6 +250,10 @@ workerPoolSpecs:
 
         # ── ClearML experiment tracking (optional) ────────────────────────────
         # Leave YOUR_* placeholders; inject real values at submit time (do not commit secrets).
+        # SECURITY: a real access key + secret key were committed here (2026-05-18,
+        # 964fe173). Treat that credential pair as compromised — rotate it on the
+        # self-hosted ClearML server regardless of this redaction — and inject the
+        # new values at submit time only, never back into this file.
         # For self-hosted ClearML server, you need ALL of these hosts configured:
         - name: CLEARML_API_HOST
           value: "http://34.91.159.68:8008"
@@ -258,9 +262,9 @@ workerPoolSpecs:
         - name: CLEARML_FILES_HOST
           value: "http://34.91.159.68:8081"
         - name: CLEARML_API_ACCESS_KEY
-          value: "PHJJ7RGPZVA387G1HOXH"
+          value: "YOUR_CLEARML_ACCESS_KEY"
         - name: CLEARML_API_SECRET_KEY
-          value: "ZzrGLmJUu8qTCRf9IzRiQrQPBxQcZ1ZHKSogeKEBEX9sbeaYbV"
+          value: "YOUR_CLEARML_SECRET_KEY"
         - name: CLEARML_PROJECT
           value: "AI Synthesizer"
         - name: CLEARML_TASK_NAME
